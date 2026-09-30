@@ -1,0 +1,31 @@
+# Dependencies — commit to version control, not to disk
+
+# Large generated perf fixtures
+spike/cache/
+spike/*.log
+spike/*.err
+
+# Real repos used for benchmarking
+*.llvm-spike/
+
+# Build output
+target/
+node_modules/
+dist/
+dist-*/
+
+# Secrets — never commit these
+.env
+.env.*
+*.pem
+id_rsa
+id_ed25519
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Scratch git fixtures
+test_repo/

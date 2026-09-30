@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Gitflowfy spike - commit graph</title>
+<style>
+  :root { --bg:#0d1117; --fg:#c9d1d9; --dim:#6e7681; --acc:#58a6ff; --ok:#3fb950; --bad:#f85149; --panel:#161b22; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--fg);
+    font:13px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; overflow:hidden; }
+  #cv { display:block; width:100vw; height:100vh; cursor:grab; }
+  #cv.drag { cursor:grabbing; }
+  .hud { position:fixed; background:rgba(22,27,34,.94); border:1px solid #30363d; border-radius:6px;
+         padding:8px 10px; backdrop-filter:blur(6px); }
+  #top { top:10px; left:10px; }
+  #perf { top:10px; right:10px; min-width:250px; }
+  #bot { bottom:10px; left:10px; max-width:min(900px,60vw); display:none; }
+  .k { color:var(--dim); }
+  .v { color:var(--fg); }
+  .good { color:var(--ok); } .warn { color:#d29922; } .poorbad { color:var(--bad); }
+  .row { display:flex; justify-content:space-between; gap:14px; }
+  button { background:#21262d; color:var(--fg); border:1px solid #30363d; border-radius:5px;
+           padding:4px 9px; font:inherit; cursor:pointer; }
+  button:hover { background:#30363d; }
+  button:disabled { opacity:.4; cursor:default; }
+  input[type=range] { vertical-align:middle; }
+  .subj { color:#e6edf3; word-break:break-word; }
+  .meta { color:var(--dim); }
+  hr { border:0; border-top:1px solid #30363d; margin:6px 0; }
+  .title { color:var(--acc); font-weight:600; }
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+
+<div class="hud" id="top">
+  <div class="row"><span class="k">commits</span><span class="v" id="nCommits">...</span></div>
+  <div class="row"><span class="k">row h</span><span><input type="range" id="rowh" min="1" max="24" value="18"><span class="v" id="rowhV">18</span>px</span></div>
+  <div class="row"><span class="k">visible rows</span><span class="v" id="vis">0</span></div>
+  <div class="row"><span class="k">draw calls</span><span class="v" id="calls">0</span></div>
+  <hr>
+  <div class="row"><span class="k">fps</span><span class="v" id="fps">-</span></div>
+  <hr>
+  <div><button id="stress">Run stress test (full traverse)</button></div>
+  <div style="margin-top:4px"><button id="zoomout">Zoom out to max</button></div>
+</div>
+
+<div class="hud" id="perf"><div class="title">frame time (ms)</div>
+  <div class="row"><span class="k">p50</span><span class="v" id="p50">-</span></div>
+  <div class="row"><span class="k">p95</span><span class="v" id="p95">-</span></div>
+  <div class="row"><span class="k">p99</span><span class="v" id="p99">-</span></div>
+  <div class="row"><span class="k">max</span><span class="v" id="pmax">-</span></div>
+  <div class="row"><span class="k">frames</span><span class="v" id="frames">0</span></div>
+  <hr>
+  <div class="row"><span class="k">js heap</span><span class="v" id="heap">-</span></div>
+</div>
+
+<div class="hud" id="bot">
+  <div class="subj" id="dSubj"></div>
+  <div class="meta" id="dMeta"></div>
+  <div class="meta" id="dBody"></div>
+</div>
+
+<script>
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d', { alpha:false })
+const EDGE='#3fb950', MERGE='#f0883e', NODE='#58a6ff', MGNODE='#f85149', BG='#0d1117'
+const LANE_W = 15, PAD = 20
+let W=0, H=0, dpr=1
+
+let n=0, off, prow, plane, lane
+const subjects = new Map()
+let winFrom = -1, winTo = -1, inflight = false
+
+const state = { offY:0, offX:0, rowH:18, sel:-1 }
+
+const st = { frames:[], last:0, calls:0, t0:0 }
+
+function resize(){
+  dpr = Math.min(devicePixelRatio||1, 2)
+  W = innerWidth; H = innerHeight
+  cv.width = W*dpr; cv.height = H*dpr
+}
+addEventListener('resize', resize); resize()
+
+async function load(){
+  const t0 = performance.now()
+  const r = await fetch('/graph.bin'); const b = await r.arrayBuffer()
+  let p = 0
+  n = new Int32Array(b, p, 1)[0]; p += 4
+  off   = new Uint32Array(b, p, n+1); p += off.byteLength
+  prow  = new Uint32Array(b, p, prowLen()); p += prow.byteLength
+  plane = new Int32Array (b, p, prowLen()); p += plane.byteLength
+  lane  = new Int32Array (b, p, n); p += lane.byteLength
+  function prowLen(){ return off[n] }
+  document.getElementById('nCommits').textContent = n.toLocaleString()
+  const dt = performance.now()-t0
+  state.offY = Math.max(0, n*state.rowH - H)
+  document.getElementById('heap').textContent = (performance.usedJSHeapSize/1048576).toFixed(0)+' MB (load '+dt.toFixed(0)+'ms)'
+  requestAnimationFrame(loop)
+}
+
+function ensureWindow(first, last){
+  if (inflight) return
+  if (first >= winFrom && last <= winTo) return
+  const from = Math.max(0, first-50), to = Math.min(n, last+50)
+  inflight = true
+  fetch(`/window?from=${from}&count=${to-from}`).then(r=>r.json()).then(d=>{
+    for (let i=0;i<d.subjects.length;i++) subjects.set(d.from+i, d.subjects[i])
+    winFrom = d.from; winTo = d.from + d.subjects.length
+  }).catch(()=>{}).finally(()=>{ inflight=false })
+}
+
+function draw(){
+  ctx.setTransform(dpr,0,0,dpr,0,0)
+  ctx.fillStyle = BG; ctx.fillRect(0,0,W,H)
+  const rowH = state.rowH, offY = state.offY, offX = state.offX
+  const first = Math.max(0, Math.floor(offY/rowH))
+  const last  = Math.min(n, Math.ceil((offY+H)/rowH))
+  document.getElementById('vis').textContent = (last-first).toLocaleString()
+  if (last<=first) return
+  ensureWindow(first,last)
+
+  let calls = 0
+  const r0 = Math.max(1, rowH/9)
+  const nodeR = Math.max(0.6, rowH/3.2)
+  const showText = rowH >= 9
+  const textX = PAD + 6*LANE_W + 10
+
+  // ---- edges
+  ctx.lineWidth = r0; ctx.lineCap='round'
+  for (let r=first; r<last; r++){
+    const s=off[r], e=off[r+1]; if (s===e) continue
+    const y  = r*rowH - offY + rowH/2
+    const lx = lane[r]*LANE_W + offX + PAD
+    const p0 = prow[s]
+    ctx.strokeStyle = EDGE
+    ctx.beginPath()
+    ctx.moveTo(lx,y)
+    ctx.lineTo(lane[p0]*LANE_W + offX + PAD, p0*rowH - offY + rowH/2)
+    ctx.stroke(); calls++
+    for (let k=s+1;k<e;k++){
+      const pr = prow[k]
+      const prx = lane[pr]*LANE_W + offX + PAD
+      const pry = pr*rowH - offY + rowH/2
+      ctx.strokeStyle = MERGE
+      ctx.beginPath()
+      ctx.moveTo(lx,y)
+      ctx.bezierCurveTo(lx, y+rowH, prx, pry-rowH, prx, pry)
+      ctx.stroke(); calls++
+    }
+  }
+
+  // ---- nodes
+  for (let r=first; r<last; r++){
+    const s=off[r], e=off[r+1]
+    const x = lane[r]*LANE_W + offX + PAD
+    const y = r*rowH - offY + rowH/2
+    ctx.fillStyle = (e-s)>1 ? MGNODE : NODE
+    ctx.beginPath(); ctx.arc(x,y,nodeR,0,6.2832); ctx.fill(); calls++
+    if (r===state.sel){
+      ctx.strokeStyle='#fff'; ctx.lineWidth=1.5
+      ctx.beginPath(); ctx.arc(x,y,nodeR+2.5,0,6.2832); ctx.stroke(); calls++
+    }
+  }
+
+  // ---- labels (the slow part; realistic)
+  if (showText){
+    ctx.textBaseline='middle'
+    for (let r=first; r<last; r++){
+      const s = subjects.get(r); if (!s) continue
+      const y = r*rowH - offY + rowH/2
+      ctx.fillStyle = '#e6edf3'
+      ctx.fillText(s.length>90 ? s.slice(0,90)+'...' : s, textX, y); calls++
+    }
+  }
+  st.calls = calls
+  document.getElementById('calls').textContent = calls.toLocaleString()
+}
+
+function loop(){
+  const now = performance.now()
+  if (st.last) st.frames.push(now-st.last)
+  st.last = now
+  draw()
+  if (st.frames.length>1){
+    const a = st.frames.slice(-90)
+    a.sort((x,y)=>x-y)
+    const med = a[a.length>>1]
+    document.getElementById('fps').textContent = (1000/med).toFixed(0)
+  }
+  requestAnimationFrame(loop)
+}
+
+// ---------- interaction
+let drag=null
+cv.addEventListener('pointerdown', e=>{ drag={x:e.clientX,y:e.clientY}; cv.classList.add('drag'); cv.setPointerCapture(e.pointerId) })
+cv.addEventListener('pointermove', e=>{
+  if(!drag) return
+  state.offY -= e.clientY-drag.y; state.offX -= e.clientX-drag.x
+  drag={x:e.clientX,y:e.clientY}
+  clamp()
+})
+cv.addEventListener('pointerup', e=>{
+  cv.classList.remove('drag')
+  if (drag && Math.abs(e.clientX-drag.x)<3 && Math.abs(e.clientY-drag.y)<3) select(e)
+  drag=null
+})
+cv.addEventListener('wheel', e=>{
+  e.preventDefault()
+  if (e.ctrlKey || e.shiftKey){ state.rowH = Math.max(1, Math.min(24, state.rowH*(e.deltaY>0?1.12:0.89))) }
+  else { state.offY += e.deltaY; state.offX -= e.deltaX }
+  clamp()
+}, {passive:false})
+
+function clamp(){
+  const maxY = Math.max(0, n*state.rowH - H)
+  state.offY = Math.max(0, Math.min(maxY, state.offY))
+  const minX = PAD - (maxLane()*LANE_W + 60), maxX = PAD + 40
+  state.offX = Math.max(minX, Math.min(maxX, state.offX))
+}
+function maxLane(){ let m=0; for(let i=0;i<n;i++) if(lane[i]>m) m=lane[i]; return m }
+
+async function select(e){
+  const r = Math.floor((e.clientY - state.rowH/2 + state.offY)/state.rowH)
+  if (r<0||r>=n) return
+  state.sel = r
+  document.getElementById('bot').style.display='block'
+  const d = await fetch('/commit/'+r).then(x=>x.json())
+  document.getElementById('dSubj').textContent = d.subject
+  document.getElementById('dMeta').textContent =
+    `${d.oid.slice(0,10)}    ${d.author} <${d.email}>    ${new Date(d.date).toISOString().slice(0,16)}    ${d.parents.length} parent(s)`
+  document.getElementById('dBody').textContent = d.body.slice(0,300)
+}
+
+document.getElementById('rowh').addEventListener('input', e=>{
+  const anchor = (state.offY + H/2)/state.rowH
+  state.rowH = +e.target.value
+  document.getElementById('rowhV').textContent = state.rowH
+  state.offY = anchor*state.rowH - H/2
+  clamp()
+})
+document.getElementById('zoomout').addEventListener('click', ()=>{
+  state.rowH = 1; document.getElementById('rowh').value = 1
+  document.getElementById('rowhV').textContent = 1
+  clamp()
+})
+
+// ---------- stress test: traverse the ENTIRE graph as fast as rAF allows
+document.getElementById('stress').addEventListener('click', ()=>{
+  const btn = document.getElementById('stress'); btn.disabled = true
+  const DURATION = 6000
+  const totalH = n*state.rowH
+  const startY = 0
+  const t0 = performance.now()
+  st.frames = []
+  const savedRowH = state.rowH
+  state.rowH = 4   // worst case: many rows on screen at once
+  document.getElementById('rowh').value = 4
+  document.getElementById('rowhV').textContent = 4
+  state.offY = 0
+  function step(){
+    const el = performance.now()-t0
+    const p = Math.min(1, el/DURATION)
+    state.offY = startY + p*(totalH - H)
+    state.offX = -PAD
+    clamp()
+    if (p < 1) requestAnimationFrame(step)
+    else {
+      state.rowH = savedRowH
+      document.getElementById('rowh').value = savedRowH
+      document.getElementById('rowhV').textContent = savedRowH
+      report(); btn.disabled = false
+    }
+  }
+  requestAnimationFrame(step)
+})
+
+function report(){
+  const a = st.frames.filter(x=>x>0).sort((x,y)=>x-y)
+  if (!a.length) return
+  const q = p => a[Math.min(a.length-1, Math.floor(a.length*p))]
+  const set=(id,v,cls)=>{ const e=document.getElementById(id); e.textContent=v; e.className='v '+(cls||'') }
+  const worst = q(0.99)
+  const cls = worst < 20 ? 'good' : worst < 34 ? 'warn' : 'poorbad'
+  set('p50', q(0.5).toFixed(1)); set('p95', q(0.95).toFixed(1), q(0.95)<20?'good':q(0.95)<34?'warn':'poorbad')
+  set('p99', worst.toFixed(1), cls)
+  set('pmax', a[a.length-1].toFixed(1))
+  set('frames', a.length.toLocaleString())
+  document.getElementById('heap').textContent = (performance.usedJSHeapSize/1048576).toFixed(0)+' MB'
+  window.__spike = { frames:a.length, p50:q(0.5), p95:q(0.95), p99:worst, max:a[a.length-1],
+                     commits:n, rowH:4, heapMB:performance.usedJSHeapSize/1048576 }
+}
+
+load()
+</script>
+</body>
+</html>

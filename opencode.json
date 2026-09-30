@@ -1,0 +1,36 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": ["AGENTS.md", ".claude/constitution.md"],
+  "skills": {
+    "paths": [".claude/skills"]
+  },
+  "references": {
+    "constitution": {
+      "path": ".claude/constitution.md",
+      "description": "Binding nine-article constitution. Every spec, plan, and implementation is checked against it."
+    },
+    "specs": {
+      "path": "specs",
+      "description": "Feature specifications, plans, and task lists. One directory per feature."
+    },
+    "templates": {
+      "path": ".claude/templates",
+      "description": "Templates for spec.md, plan.md, and tasks.md that the SDD agents fill in."
+    }
+  },
+  "permission": {
+    "bash": {
+      "*": "ask",
+      "git status*": "allow",
+      "git log*": "allow",
+      "git diff*": "allow",
+      "git show*": "allow",
+      "node spike/run-spike.mjs*": "allow",
+      "node --experimental-websocket spike/run-spike.mjs*": "allow",
+      "cargo test*": "allow",
+      "cargo build*": "allow",
+      "cargo clippy*": "allow",
+      "cargo fmt*": "allow"
+    }
+  }
+}
