@@ -2,7 +2,7 @@
 
 **Branch**: `001-headless-git-operations`
 **Spec**: [spec.md](spec.md)
-**Status**: Draft
+**Status**: Approved
 **Created**: 2026-09-29
 **Executable**: `gitflowfy` (chosen here; the spec deliberately left it open)
 

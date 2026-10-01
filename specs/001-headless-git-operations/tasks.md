@@ -3,7 +3,7 @@
 **Branch**: `001-headless-git-operations`
 **Plan**: [plan.md](plan.md)
 **Spec**: [spec.md](spec.md)
-**Status**: Draft
+**Status**: Approved
 
 **Constitution Article III applies**: tests first, always. The order below encodes
 that. No test task may be reordered after its implementation task.
