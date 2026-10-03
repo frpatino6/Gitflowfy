@@ -19,13 +19,13 @@ This feature ports the spike's graph builder and renderer into the product:
 2. **Renderer**: Canvas with typed arrays, 60 fps p50, 30 fps p99, 50 ms max frame
 3. **Tauri v2 integration**: webview hosts renderer, core sends `graph.bin` via command surface
 
-The graph is the core differentiator: incumbents (GitKraken, Fork, Extensions) reimplement Git's operation layer to support their own undo, which limits command coverage and breaks on unusual repo states. Our graph is built from real `git` output via the headless surface, so it reflects *exactly* what Git sees — including unusual states from Feature 001's fixtures.
+The graph is the core differentiator: incumbents (GitKraken, Fork, Extensions) reimplement Git's operation layer to support their own undo, which limits command coverage and breaks on unusual repo states. Our graph is built from real `git` output via the headless surface, so it reflects *exactly* what Git sees - including unusual states from Feature 001's fixtures.
 
 ## Scope
 
 ### In Scope
 
-- Graph builder: `git log --all --topo-order --format=...` → CSR typed arrays → `graph.bin`
+- Graph builder: `git log --all --topo-order --format=...` -> CSR typed arrays -> `graph.bin`
 - Renderer: Canvas 2D, typed arrays, virtualized viewport, 60 fps p50
 - Tauri v2: webview hosts renderer, core sends `graph.bin` via command surface
 - Binary format: CSR layout (5 typed arrays) carried byte-for-byte from spike
@@ -34,10 +34,10 @@ The graph is the core differentiator: incumbents (GitKraken, Fork, Extensions) r
 
 ### Out of Scope
 
-- GUI chrome (toolbars, menus, sidebars) — separate feature
-- User interactions beyond viewport pan/zoom — separate feature
-- Multi-repo tabs — separate feature
-- Search/filter UI — separate feature
+- GUI chrome (toolbars, menus, sidebars) - separate feature
+- User interactions beyond viewport pan/zoom - separate feature
+- Multi-repo tabs - separate feature
+- Search/filter UI - separate feature
 
 ## User Stories
 
@@ -60,10 +60,10 @@ The graph is the core differentiator: incumbents (GitKraken, Fork, Extensions) r
 **I want** smooth pan/zoom at 60 fps
 **so that** exploration feels instantaneous
 
-**Independent test**: Load 600k-commit graph, pan 1000px horizontally, record frame times. Assert p50 ≤ 16.7 ms, p99 ≤ 33.4 ms, max ≤ 50 ms.
+**Independent test**: Load 600k-commit graph, pan 1000px horizontally, record frame times. Assert p50 <= 16.7 ms, p99 <= 33.4 ms, max <= 50 ms.
 
 **Acceptance scenarios**:
-1. Given loaded graph, when panning, then frame p50 ≤ 16.7 ms, p99 ≤ 33.4 ms
+1. Given loaded graph, when panning, then frame p50 <= 16.7 ms, p99 <= 33.4 ms
 2. Given loaded graph, when zooming, then no frame > 50 ms
 3. Given 600k commits, when initial render, then load < 2 s
 
@@ -118,8 +118,8 @@ The `graph.bin` format (5 typed arrays, CSR layout) is the contract between buil
 ### NFR-003: Tauri Command Surface
 
 Graph operations exposed via Feature 001's command surface:
-- `gitflowfy graph build <repo> <output>` — builds `graph.bin`
-- `gitflowfy graph load <repo>` — returns bytes for webview
+- `gitflowfy graph build <repo> <output>` - builds `graph.bin`
+- `gitflowfy graph load <repo>` - returns bytes for webview
 - No direct renderer access from CLI
 
 ### NFR-004: Cross-Platform
@@ -134,13 +134,13 @@ CI: Windows + Linux required
 
 ## Constraints & Decisions
 
-### Q1: Renderer Language → **Resolved: TypeScript in Tauri webview (A)**
+### Q1: Renderer Language -> **Resolved: TypeScript in Tauri webview (A)**
 
 **Decision**: Reuse spike renderer directly in Tauri webview. Zero port effort, validated budgets.
 
 **Rationale**: Spike renderer already validated at 19.5 ms p99. Porting to Rust (B)/(C) adds effort with no proven benefit. Article VI budgets already met by (A).
 
-### Q2: Graph Incremental Updates → **Resolved: Full rebuild (A)**
+### Q2: Graph Incremental Updates -> **Resolved: Full rebuild (A)**
 
 **Decision**: Full rebuild on every change. 9.7 s is acceptable for initial implementation.
 
@@ -148,7 +148,7 @@ CI: Windows + Linux required
 
 ### [NEEDS CLARIFICATION] Q3: Large File Handling
 
-### Q3: Large File Handling → **Resolved: Tauri invoke with ArrayBuffer (A)**
+### Q3: Large File Handling -> **Resolved: Tauri invoke with ArrayBuffer (A)**
 
 **Decision**: Pass `graph.bin` as `ArrayBuffer` via Tauri `invoke`. Zero-copy, 9.6 MB is small.
 
@@ -156,13 +156,13 @@ CI: Windows + Linux required
 
 ---
 
-### Q4: Graph Layout Algorithm → **Resolved: Port spike's lane assignment exactly (A)**
+### Q4: Graph Layout Algorithm -> **Resolved: Port spike's lane assignment exactly (A)**
 
 **Decision**: Port the spike's lane assignment algorithm exactly. Guarantees spike parity.
 
 **Rationale**: Spike already validated at 19.5 ms p99. Improving (B) risks budget regression. External lib (C) violates Article VIII.
 
-### Q5: Webview Communication → **Resolved: Tauri invoke with ArrayBuffer (A)**
+### Q5: Webview Communication -> **Resolved: Tauri invoke with ArrayBuffer (A)**
 
 **Decision**: Pass `graph.bin` as `ArrayBuffer` via Tauri `invoke`. Fastest, zero-copy.
 
@@ -180,4 +180,4 @@ CI: Windows + Linux required
 
 ---
 
-*Spec version 1.0.0 — all clarifications resolved, ready for review*
+*Spec version 1.0.0 - all clarifications resolved, ready for review*

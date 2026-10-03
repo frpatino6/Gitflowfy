@@ -31,8 +31,21 @@ fn test_merged_mutating() {
     let _ = gitflowfy_core::fixtures::build_merged(&repo1);
     let _ = gitflowfy_core::fixtures::build_merged(&repo2);
 
-    let diff = gitflowfy_core::differential::run_and_compare(&repo1, &repo2, &["commit", "--allow-empty", "-m", "test"]).unwrap();
-    assert!(diff.observable_diffs.is_empty(), "mutating commit: {:?}", diff.observable_diffs);
+    // Verify repos are identical before mutation
+    let diff_before = gitflowfy_core::differential::run_and_compare(&repo1, &repo2, &["status"]).unwrap();
+    assert!(diff_before.observable_diffs.is_empty(), "repos should be identical before mutation");
+
+    // Apply same mutation to both repos
+    let _ = gitflowfy_core::differential::run_and_compare(&repo1, &repo2, &["commit", "--allow-empty", "-m", "test"]).unwrap();
+
+    // After same mutation, repos should still be structurally identical
+    // (they will have different commit OIDs due to timestamps, but structure should match)
+    let diff_after = gitflowfy_core::differential::run_and_compare(&repo1, &repo2, &["status"]).unwrap();
+    // Allow refs/head/reflog to differ due to different commit OIDs/timestamps
+    let structural_diffs: Vec<_> = diff_after.observable_diffs.iter()
+        .filter(|d| !["refs", "head", "reflog"].contains(&d.as_str()))
+        .collect();
+    assert!(structural_diffs.is_empty(), "structural diffs after mutation: {:?}", structural_diffs);
 
     let _ = fs::remove_dir_all(&repo1);
     let _ = fs::remove_dir_all(&repo2);

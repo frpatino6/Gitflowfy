@@ -149,13 +149,17 @@ fn test_runs_with_no_display() {
 }
 
 #[test]
-fn test_no_ui_crate_in_workspace() {
+fn test_workspace_crate_count() {
     let cwd = env::current_dir().unwrap();
-    let workspace_root = cwd.parent().unwrap().parent().unwrap(); // tests/ -> core/ -> project root
+    let workspace_root = cwd.parent().unwrap().parent().unwrap();
     let cargo_toml = fs::read_to_string(workspace_root.join("Cargo.toml")).unwrap();
-    // Workspace members should not include crates/ui or apps/desktop
-    assert!(!cargo_toml.contains("crates/ui"));
-    assert!(!cargo_toml.contains("apps/desktop"));
-    // Only crates/core should be present in members
+    // Constitution Article VII: at most 3 crates
+    let crate_count = cargo_toml.matches("crates/core").count()
+        + cargo_toml.matches("apps/desktop").count()
+        + cargo_toml.matches("crates/ui").count();
+    assert!(crate_count <= 3, "Workspace has {} crates, max is 3", crate_count);
+    // Required core crate
     assert!(cargo_toml.contains("crates/core"));
+    // apps/desktop is the GUI crate (2nd crate)
+    assert!(cargo_toml.contains("apps/desktop"));
 }

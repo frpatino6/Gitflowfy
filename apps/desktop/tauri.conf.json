@@ -1,0 +1,71 @@
+{
+  "$schema": "https://schema.tauri.app/config/2.0.0",
+  "identifier": "com.gitflowfy.desktop",
+  "productName": "Gitflowfy",
+  "version": "0.1.0",
+  "build": {
+    "frontendDist": "../../crates/ui",
+    "devUrl": "http://localhost:3000",
+    "beforeDevCommand": "cd ../../crates/ui && npm run dev",
+    "beforeBuildCommand": "cd ../../crates/ui && npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Gitflowfy",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 1000,
+        "minHeight": 700,
+        "center": true,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true,
+        "transparent": false,
+        "visible": true,
+        "focus": true,
+        "maximizable": true,
+        "minimizable": true,
+        "closable": true,
+        "titleBarStyle": "visible"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws: wss: http: https:; font-src 'self' data:;"
+    },
+    "withGlobalTauri": true
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [],
+    "resources": [],
+    "externalBin": [],
+    "copyright": "Gitflowfy contributors",
+    "category": "DeveloperTool",
+    "shortDescription": "Git client with graph visualization",
+    "longDescription": "A Git client with graph visualization, headless operations, and repository state recovery."
+  },
+  "plugins": {
+    "shell": {
+      "open": true,
+      "scope": {
+        "allow": ["https://github.com/*", "https://gitlab.com/*", "https://bitbucket.org/*"]
+      }
+    },
+    "fs": {
+      "scope": ["$APPDATA/gitflowfy/*", "$HOME/.config/gitflowfy/*", "$HOME/.gitflowfy/*"]
+    },
+    "dialog": {
+      "open": true,
+      "save": true
+    },
+    "clipboardManager": {
+      "readText": true,
+      "writeText": true
+    },
+    "globalShortcut": {
+      "all": true
+    }
+  }
+}

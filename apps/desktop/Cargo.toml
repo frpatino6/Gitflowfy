@@ -1,0 +1,16 @@
+[package]
+name = "gitflowfy-desktop"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tauri = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+gitflowfy-core = { path = "../../crates/core" }
+tokio = { workspace = true, features = ["full"] }
+anyhow = { workspace = true }
+uuid = { workspace = true, features = ["v4", "serde"] }
+
+[build-dependencies]
+tauri-build = { workspace = true }

@@ -113,4 +113,12 @@ impl AuditLog {
         let truncated = self.enforce_cap()?;
         Ok(truncated)
     }
+
+    pub fn get_records(&self) -> Result<Vec<AuditRecord>, GitflowError> {
+        self.read_all()
+    }
+
+    pub fn truncate(&self) -> Result<(), GitflowError> {
+        self.enforce_cap().map(|_| ())
+    }
 }

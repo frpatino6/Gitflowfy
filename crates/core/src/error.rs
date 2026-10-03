@@ -40,6 +40,15 @@ pub enum GitflowError {
 
     #[error("concurrent append corrupted audit line")]
     CorruptedAuditLine,
+
+    #[error("{0}")]
+    Other(String),
+}
+
+impl From<Box<dyn std::error::Error>> for GitflowError {
+    fn from(e: Box<dyn std::error::Error>) -> Self {
+        GitflowError::Other(e.to_string())
+    }
 }
 
 impl GitflowError {

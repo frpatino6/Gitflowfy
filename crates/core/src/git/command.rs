@@ -11,7 +11,7 @@ pub struct GitCommand {
     pub args: Vec<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct Invocation {
     pub argv: Vec<String>,
     pub exit_code: i32,
@@ -27,7 +27,25 @@ impl GitCommand {
             args: args.into_iter().map(|s| s.as_ref().to_string()).collect(),
         }
     }
+}
 
+pub fn get_ahead_behind(repo: impl AsRef<Path>) -> Result<(i32, i32), GitflowError> {
+    let cmd = GitCommand::new(repo, ["rev-list", "--left-right", "--count", "HEAD...@{u}"]);
+    let result = cmd.run()?;
+
+    if result.exit_code == 0 {
+        let stdout = String::from_utf8_lossy(&result.stdout);
+        let parts: Vec<&str> = stdout.trim().split('\t').collect();
+        if parts.len() == 2 {
+            let ahead = parts[0].parse().unwrap_or(0);
+            let behind = parts[1].parse().unwrap_or(0);
+            return Ok((ahead, behind));
+        }
+    }
+    Ok((0, 0))
+}
+
+impl GitCommand {
     pub fn run(&self) -> Result<Invocation, GitflowError> {
         if let Some(verb) = self.args.first() {
             RemoteRefusal::check(verb)?;

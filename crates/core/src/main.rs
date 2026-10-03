@@ -1,12 +1,27 @@
 use gitflowfy_core::cli::{parse_args, Command};
 use gitflowfy_core::error::GitflowError;
-use gitflowfy_core::git::{AuditLog, AuditRecord, GitCommand};
+use gitflowfy_core::git::{AuditLog, AuditRecord, GitCommand, RepoLock};
+use gitflowfy_core::differential::{run_and_compare, DiffResult};
+use gitflowfy_core::fixtures::{build_linear, build_merged, build_octopus, build_orphan, build_detached, build_empty};
 use std::io::{self, Write};
 use std::path::Path;
 use std::process;
 use std::time::Duration;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc;
+use ctrlc;
+
+static CANCELLED: AtomicBool = AtomicBool::new(false);
 
 fn main() {
+    let cancelled = Arc::new(AtomicBool::new(false));
+    let c = cancelled.clone();
+    ctrlc::set_handler(move || {
+        c.store(true, Ordering::SeqCst);
+        CANCELLED.store(true, Ordering::SeqCst);
+    }).ok();
+
     let parsed = match parse_args() {
         Ok(a) => a,
         Err(e) => {
@@ -16,7 +31,7 @@ fn main() {
     };
 
     let result = match parsed.command {
-        Command::Git { repo, args } => run_git(&repo, &args, parsed.json),
+        Command::Git { repo, args } => run_git(&repo, &args, parsed.json, cancelled),
         Command::Audit { repo } => run_audit(&repo, parsed.json),
         Command::Diff { baseline, candidate } => run_diff(&baseline, &candidate, parsed.json),
         Command::Fixtures { shape, path } => run_fixtures(&shape, &path, parsed.json),
@@ -32,10 +47,20 @@ fn main() {
     }
 }
 
-fn run_git(repo: &std::path::Path, argv: &[String], json: bool) -> Result<(), Box<dyn std::error::Error>> {
+fn run_git(repo: &std::path::Path, argv: &[String], json: bool, cancelled: Arc<AtomicBool>) -> Result<(), Box<dyn std::error::Error>> {
+    let _lock = RepoLock::acquire(repo)?;
+
+    if CANCELLED.load(Ordering::SeqCst) || cancelled.load(Ordering::SeqCst) {
+        return Err("Operation cancelled".into());
+    }
+
     let cmd = GitCommand::new(repo, argv);
     let inv = cmd.run()?;
     
+    if CANCELLED.load(Ordering::SeqCst) || cancelled.load(Ordering::SeqCst) {
+        return Err("Operation cancelled after execution".into());
+    }
+
     let log = AuditLog::open(repo)?;
     let record = AuditRecord {
         cwd: repo.to_string_lossy().to_string(),
@@ -85,19 +110,49 @@ fn run_audit(repo: &Path, json: bool) -> Result<(), Box<dyn std::error::Error>> 
 }
 
 fn run_diff(baseline: &Path, candidate: &Path, json: bool) -> Result<(), Box<dyn std::error::Error>> {
+    let result: DiffResult = run_and_compare(baseline, candidate, &["status"])?;
+
     if json {
-        println!("{}", serde_json::to_string(&serde_json::json!({"status": "not implemented"}))?);
+        println!("{}", serde_json::to_string(&result)?);
     } else {
-        println!("diff not implemented");
+        if result.observable_diffs.is_empty() && result.stdout_diffs.is_empty() && result.stderr_diffs.is_empty() {
+            println!("No differences");
+        } else {
+            for d in &result.observable_diffs {
+                println!("Observable diff: {}", d);
+            }
+            for d in &result.stdout_diffs {
+                println!("Stdout diff: {}", d);
+            }
+            for d in &result.stderr_diffs {
+                println!("Stderr diff: {}", d);
+            }
+        }
     }
     Ok(())
 }
 
 fn run_fixtures(shape: &str, path: &Path, json: bool) -> Result<(), Box<dyn std::error::Error>> {
+    let result = match shape {
+        "linear" => build_linear(path, 10),
+        "merged" => build_merged(path),
+        "octopus" => build_octopus(path),
+        "orphan" => build_orphan(path),
+        "detached" => build_detached(path),
+        "empty" => build_empty(path),
+        _ => return Err(format!("Unknown fixture shape: {}", shape).into()),
+    };
+
+    result?;
+
     if json {
-        println!("{}", serde_json::to_string(&serde_json::json!({"status": "not implemented"}))?);
+        println!("{}", serde_json::to_string(&serde_json::json!({
+            "status": "created",
+            "shape": shape,
+            "path": path.to_string_lossy(),
+        }))?);
     } else {
-        println!("fixtures build {} not implemented", shape);
+        println!("Created {} fixture at {}", shape, path.display());
     }
     Ok(())
 }

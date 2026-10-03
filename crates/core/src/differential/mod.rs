@@ -3,11 +3,11 @@ use std::process::Command;
 use std::error::Error;
 
 mod observables;
-use observables::{Observables, HeadState, collect_observables, compare_observables};
+pub use observables::{Observables, HeadState, collect_observables, compare_observables};
 
 use crate::git::{GitCommand, Invocation};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct DiffResult {
     pub observable_diffs: Vec<String>,
     pub stdout_diffs: Vec<String>,

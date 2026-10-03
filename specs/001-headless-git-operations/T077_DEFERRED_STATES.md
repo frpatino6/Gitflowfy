@@ -1,6 +1,6 @@
 # T077: Deferred Article V States Carried Forward
 
-**Status:** ✅ CONFIRMED
+**Status:**  CONFIRMED
 
 The following Article V states were explicitly deferred from Feature 001 scope but carry a binding narrow obligation (return Git's exit code, record it, do not hang, do not corrupt). Full recovery affordances are deferred to the **repository-state feature**.
 
